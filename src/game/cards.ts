@@ -1,0 +1,112 @@
+import type { CardDefinition } from './types'
+
+export const cards: CardDefinition[] = [
+  {
+    id: 'strike',
+    name: 'Strike',
+    type: 'attack',
+    description: '적에게 6 피해를 줍니다.',
+    source: 'starter',
+    effect: { damage: 6 },
+  },
+  {
+    id: 'guard',
+    name: 'Guard',
+    type: 'defense',
+    description: '방어도 6을 얻습니다.',
+    source: 'starter',
+    effect: { block: 6 },
+  },
+  {
+    id: 'heal',
+    name: 'Heal',
+    type: 'heal',
+    description: '체력을 5 회복합니다.',
+    source: 'starter',
+    effect: { heal: 5 },
+  },
+  {
+    id: 'poison_dart',
+    name: 'Poison Dart',
+    type: 'debuff',
+    description: '적에게 독 3을 부여합니다.',
+    source: 'starter',
+    effect: { poison: 3 },
+  },
+  {
+    id: 'focus',
+    name: 'Focus',
+    type: 'buff',
+    description: '다음 공격 피해가 5 증가합니다.',
+    source: 'starter',
+    effect: { attackBonus: 5 },
+  },
+  {
+    id: 'heavy_blow',
+    name: 'Heavy Blow',
+    type: 'attack',
+    description: '적에게 12 피해를 주고 다음 턴 손패가 1장 줄어듭니다.',
+    source: 'reward',
+    effect: { damage: 12, drawPenalty: 1 },
+  },
+  {
+    id: 'double_hit',
+    name: 'Double Hit',
+    type: 'attack',
+    description: '적에게 4 피해를 두 번 줍니다.',
+    source: 'reward',
+    effect: { damage: 4, repeat: 2 },
+  },
+  {
+    id: 'shield_bash',
+    name: 'Shield Bash',
+    type: 'attack',
+    description: '현재 방어도만큼 적에게 피해를 줍니다.',
+    source: 'reward',
+    effect: { useBlockAsDamage: true },
+  },
+  {
+    id: 'first_aid',
+    name: 'First Aid',
+    type: 'heal',
+    description: '체력을 8 회복합니다.',
+    source: 'reward',
+    effect: { heal: 8 },
+  },
+  {
+    id: 'risky_attack',
+    name: 'Risky Attack',
+    type: 'attack',
+    description: '체력 3을 잃고 적에게 15 피해를 줍니다.',
+    source: 'reward',
+    effect: { damage: 15, selfDamage: 3 },
+  },
+  {
+    id: 'iron_wall',
+    name: 'Iron Wall',
+    type: 'defense',
+    description: '방어도 12를 얻습니다.',
+    source: 'reward',
+    effect: { block: 12 },
+  },
+  {
+    id: 'venom_stack',
+    name: 'Venom Stack',
+    type: 'debuff',
+    description: '적에게 독 5를 부여합니다.',
+    source: 'reward',
+    effect: { poison: 5 },
+  },
+  {
+    id: 'calm_mind',
+    name: 'Calm Mind',
+    type: 'buff',
+    description: '체력을 3 회복하고 다음 공격 피해가 3 증가합니다.',
+    source: 'reward',
+    effect: { heal: 3, attackBonus: 3 },
+  },
+]
+
+export const starterCards = cards.filter((card) => card.source === 'starter')
+export const rewardCards = cards.filter((card) => card.source === 'reward')
+export const cardsById = Object.fromEntries(cards.map((card) => [card.id, card])) as Record<string, CardDefinition>
