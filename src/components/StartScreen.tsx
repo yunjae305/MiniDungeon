@@ -6,36 +6,35 @@ export default function StartScreen({ onStart }: StartScreenProps) {
   return (
     <section className="screen start-screen">
       <div className="hero-copy">
-        <p className="hero-kicker">턴제 카드 배틀 / 미니 로그라이크</p>
-        <h1>Mini Dungeon Cards</h1>
+        <p className="hero-kicker">카드 배틀 / 미니 로그라이크</p>
+        <h1>미니 던전 카드</h1>
         <p className="hero-body">
-          매 턴 3장의 카드 중 1장을 골라 던전을 돌파하세요. 승리할 때마다 새 카드를 얻고 5스테이지 보스를
-          쓰러뜨리면 클리어입니다.
+          덱을 강화하고 에너지를 관리하며 다섯 개 스테이지를 돌파해 던전 보스를 쓰러뜨리세요.
         </p>
       </div>
 
       <div className="start-grid">
         <div className="info-panel">
-          <h2>핵심 규칙</h2>
+          <h2>진행 규칙</h2>
           <ul className="bullet-list">
-            <li>시작 덱 5장으로 1스테이지 전투를 시작합니다.</li>
-            <li>카드 효과 뒤에 적이 즉시 행동합니다.</li>
-            <li>독은 턴 종료 시 피해를 주고 1씩 줄어듭니다.</li>
-            <li>전투 승리 후 보상 카드 3장 중 1장을 얻습니다.</li>
+            <li>기본 카드 5장과 턴마다 주어지는 에너지 3으로 시작합니다.</li>
+            <li>에너지가 남아 있으면 한 턴에 여러 장의 카드를 사용할 수 있습니다.</li>
+            <li>에너지가 모두 떨어지거나 직접 턴을 끝내면 적이 행동합니다.</li>
+            <li>승리할 때마다 보상 카드 1장을 고르거나 건너뛸 수 있습니다.</li>
           </ul>
         </div>
 
         <div className="info-panel accent-panel">
           <h2>시작 카드</h2>
           <div className="starter-stack">
-            <span>Strike</span>
-            <span>Guard</span>
-            <span>Heal</span>
-            <span>Poison Dart</span>
-            <span>Focus</span>
+            <span>일격</span>
+            <span>방어</span>
+            <span>치유</span>
+            <span>독침</span>
+            <span>집중</span>
           </div>
           <button type="button" className="primary-button" onClick={onStart}>
-            게임 시작
+            탐험 시작
           </button>
         </div>
       </div>

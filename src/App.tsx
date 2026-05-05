@@ -4,7 +4,13 @@ import BattleScreen from './components/BattleScreen'
 import ResultScreen from './components/ResultScreen'
 import RewardScreen from './components/RewardScreen'
 import StartScreen from './components/StartScreen'
-import { createWelcomeState, selectRewardCard, startGame, useCard as playCard } from './game/engine'
+import {
+  createWelcomeState,
+  endTurn as finishTurn,
+  selectRewardCard,
+  startGame,
+  useCard as playCard,
+} from './game/engine'
 
 function App() {
   const [state, setState] = useState(createWelcomeState)
@@ -21,7 +27,13 @@ function App() {
     })
   }
 
-  const handleSelectReward = (cardId: string) => {
+  const handleEndTurn = () => {
+    startTransition(() => {
+      setState((current) => finishTurn(current))
+    })
+  }
+
+  const handleSelectReward = (cardId: string | null) => {
     startTransition(() => {
       setState((current) => selectRewardCard(current, cardId))
     })
@@ -34,17 +46,20 @@ function App() {
       <main className="app-frame">
         <header className="app-header">
           <div>
-            <p className="header-label">Dungeon Run</p>
-            <strong>Mini Dungeon Cards</strong>
+            <p className="header-label">던전 탐험</p>
+            <strong>미니 던전 카드</strong>
           </div>
           <div className="header-meta">
-            <span>Stage {state.stage} / {state.totalStages}</span>
-            <span>Deck {state.deck.length}</span>
+            <span>{state.stage} / {state.totalStages} 스테이지</span>
+            <span>덱 {state.deck.length}장</span>
+            {state.screen === 'battle' && <span>에너지 {state.energy} / {state.maxEnergy}</span>}
           </div>
         </header>
 
         {state.screen === 'start' && <StartScreen onStart={handleStart} />}
-        {state.screen === 'battle' && <BattleScreen state={state} onUseCard={handleUseCard} />}
+        {state.screen === 'battle' && (
+          <BattleScreen state={state} onUseCard={handleUseCard} onEndTurn={handleEndTurn} />
+        )}
         {state.screen === 'reward' && <RewardScreen state={state} onSelectCard={handleSelectReward} />}
         {state.screen === 'result' && <ResultScreen state={state} onRestart={handleStart} />}
       </main>

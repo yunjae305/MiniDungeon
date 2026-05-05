@@ -3,10 +3,11 @@ import CardItem from './CardItem'
 
 type CardListProps = {
   cards: CardDefinition[]
+  energy: number
   onUseCard: (cardId: string) => void
 }
 
-export default function CardList({ cards, onUseCard }: CardListProps) {
+export default function CardList({ cards, energy, onUseCard }: CardListProps) {
   return (
     <section className="panel hand-panel">
       <div className="panel-heading">
@@ -15,7 +16,12 @@ export default function CardList({ cards, onUseCard }: CardListProps) {
       </div>
       <div className="card-list">
         {cards.map((card, index) => (
-          <CardItem key={`${card.id}-${index}`} card={card} onUseCard={onUseCard} />
+          <CardItem
+            key={`${card.id}-${index}`}
+            card={card}
+            canUseCard={card.cost <= energy}
+            onUseCard={onUseCard}
+          />
         ))}
       </div>
     </section>
