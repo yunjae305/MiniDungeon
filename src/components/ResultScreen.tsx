@@ -1,4 +1,5 @@
 import type { GameState } from '../game/types'
+import RelicBar from './RelicBar'
 
 type ResultScreenProps = {
   state: GameState
@@ -14,7 +15,7 @@ export default function ResultScreen({ state, onRestart }: ResultScreenProps) {
         <p className="hero-kicker">{isClear ? '탐험 성공' : '탐험 실패'}</p>
         <h1>{isClear ? '던전 정복 완료' : '게임 오버'}</h1>
         <p className="hero-body">
-          총 {state.stats.turns}턴을 버텼고 보상 카드 {state.stats.cardsEarned}장을 획득했습니다.
+          총 {state.stats.turns}턴 동안 전투 {state.stats.battlesWon}회를 돌파했고 엘리트 {state.stats.elitesWon}회를 제압했습니다.
         </p>
       </div>
 
@@ -27,8 +28,12 @@ export default function ResultScreen({ state, onRestart }: ResultScreenProps) {
               <dd>{state.player.hp}</dd>
             </div>
             <div>
-              <dt>도달 스테이지</dt>
+              <dt>도달 층</dt>
               <dd>{state.stage}</dd>
+            </div>
+            <div>
+              <dt>보유 골드</dt>
+              <dd>{state.gold}</dd>
             </div>
             <div>
               <dt>덱 크기</dt>
@@ -49,6 +54,8 @@ export default function ResultScreen({ state, onRestart }: ResultScreenProps) {
           </button>
         </article>
       </div>
+
+      <RelicBar relicIds={state.relics} />
     </section>
   )
 }

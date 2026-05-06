@@ -1,31 +1,39 @@
+import { useState } from 'react'
+
 type StartScreenProps = {
-  onStart: () => void
+  onStart: (seed: string) => void
 }
 
 export default function StartScreen({ onStart }: StartScreenProps) {
+  const [seed, setSeed] = useState('20260506')
+
   return (
     <section className="screen start-screen">
       <div className="hero-copy">
         <p className="hero-kicker">카드 배틀 / 미니 로그라이크</p>
         <h1>미니 던전 카드</h1>
         <p className="hero-body">
-          덱을 강화하고 에너지를 관리하며 다섯 개 스테이지를 돌파해 던전 보스를 쓰러뜨리세요.
+          시드 기반 절차적 맵 위에서 경로를 고르고, 상태 이상과 유물 시너지를 엮어 다섯 층 던전을 돌파하세요.
         </p>
       </div>
 
       <div className="start-grid">
         <div className="info-panel">
-          <h2>진행 규칙</h2>
+          <h2>핵심 시스템</h2>
           <ul className="bullet-list">
-            <li>기본 카드 5장과 턴마다 주어지는 에너지 3으로 시작합니다.</li>
-            <li>에너지가 남아 있으면 한 턴에 여러 장의 카드를 사용할 수 있습니다.</li>
-            <li>에너지가 모두 떨어지거나 직접 턴을 끝내면 적이 행동합니다.</li>
-            <li>승리할 때마다 보상 카드 1장을 고르거나 건너뛸 수 있습니다.</li>
+            <li>중독과 취약이 턴 종료 페이즈에서 차감되며 다음 계산에 직접 반영됩니다.</li>
+            <li>적의 다음 행동 의도를 먼저 보고 손패와 에너지를 맞춰 대응할 수 있습니다.</li>
+            <li>전투, 엘리트, 휴식, 상점을 포함한 노드 맵이 시드마다 같은 구조로 재생성됩니다.</li>
+            <li>엘리트와 상점에서 얻은 유물이 조건부 지속 효과를 만들어 전투 루프를 바꿉니다.</li>
           </ul>
         </div>
 
         <div className="info-panel accent-panel">
-          <h2>시작 카드</h2>
+          <h2>탐험 시작</h2>
+          <label className="seed-field">
+            <span>던전 시드</span>
+            <input value={seed} onChange={(event) => setSeed(event.target.value)} />
+          </label>
           <div className="starter-stack">
             <span>일격</span>
             <span>방어</span>
@@ -33,7 +41,7 @@ export default function StartScreen({ onStart }: StartScreenProps) {
             <span>독침</span>
             <span>집중</span>
           </div>
-          <button type="button" className="primary-button" onClick={onStart}>
+          <button type="button" className="primary-button" onClick={() => onStart(seed)}>
             탐험 시작
           </button>
         </div>

@@ -2,6 +2,7 @@ import type { GameState } from '../game/types'
 import BattleLog from './BattleLog'
 import CardList from './CardList'
 import EnemyPanel from './EnemyPanel'
+import RelicBar from './RelicBar'
 import StatusPanel from './StatusPanel'
 
 type BattleScreenProps = {
@@ -13,13 +14,14 @@ type BattleScreenProps = {
 export default function BattleScreen({ state, onUseCard, onEndTurn }: BattleScreenProps) {
   const playerEffects = state.battleEffects.filter((effect) => effect.target === 'player')
   const enemyEffects = state.battleEffects.filter((effect) => effect.target === 'enemy')
+  const areaLabel = state.currentNode?.type === 'elite' ? '엘리트 전투' : state.currentNode?.type === 'boss' ? '보스 전투' : '일반 전투'
 
   return (
     <section className="screen battle-screen">
       <div className="battle-banner">
         <div>
-          <p className="hero-kicker">{state.stage} / {state.totalStages} 스테이지</p>
-          <h1>전투 진행 중</h1>
+          <p className="hero-kicker">{state.stage} / {state.totalStages}층 {areaLabel}</p>
+          <h1>의도를 읽고 턴을 설계하세요</h1>
         </div>
         <dl className="run-stats">
           <div>
@@ -27,15 +29,17 @@ export default function BattleScreen({ state, onUseCard, onEndTurn }: BattleScre
             <dd>{state.stats.turns}</dd>
           </div>
           <div>
-            <dt>덱</dt>
-            <dd>{state.deck.length}</dd>
+            <dt>골드</dt>
+            <dd>{state.gold}</dd>
           </div>
           <div>
-            <dt>보상</dt>
-            <dd>{state.stats.cardsEarned}</dd>
+            <dt>유물</dt>
+            <dd>{state.relics.length}</dd>
           </div>
         </dl>
       </div>
+
+      <RelicBar relicIds={state.relics} />
 
       <div className="battle-grid">
         <div className="panel-column">
@@ -46,6 +50,7 @@ export default function BattleScreen({ state, onUseCard, onEndTurn }: BattleScre
             maxHp={state.player.maxHp}
             block={state.player.block}
             poison={state.player.poison}
+            vulnerable={state.player.vulnerable}
             attackBonus={state.player.attackBonus}
             pendingDrawPenalty={state.player.pendingDrawPenalty}
             energy={state.energy}
@@ -62,7 +67,7 @@ export default function BattleScreen({ state, onUseCard, onEndTurn }: BattleScre
 
       <div className="battle-actions">
         <p className="battle-tip">
-          에너지가 남아 있는 동안 카드를 계속 사용할 수 있습니다. 손패를 아끼고 싶다면 직접 턴을 끝내세요.
+          취약은 다음 피해 계산에 1.5배를 곱하고, 중독과 취약은 턴 종료 페이즈에서 함께 줄어듭니다.
         </p>
         <button type="button" className="secondary-button end-turn-button" onClick={onEndTurn}>
           턴 종료

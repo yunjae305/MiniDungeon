@@ -6,6 +6,7 @@ type StatusPanelProps = {
   maxHp: number
   block: number
   poison: number
+  vulnerable: number
   attackBonus?: number
   pendingDrawPenalty?: number
   energy: number
@@ -20,6 +21,7 @@ export default function StatusPanel({
   maxHp,
   block,
   poison,
+  vulnerable,
   attackBonus = 0,
   pendingDrawPenalty = 0,
   energy,
@@ -58,6 +60,10 @@ export default function StatusPanel({
         <div>
           <dt>중독</dt>
           <dd>{poison}</dd>
+        </div>
+        <div>
+          <dt>취약</dt>
+          <dd>{vulnerable}</dd>
         </div>
         <div>
           <dt>강화</dt>

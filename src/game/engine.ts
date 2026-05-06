@@ -1,19 +1,28 @@
 import { cardsById, rewardCards, starterCards } from './cards'
-import { enemies, enemiesById, getEnemyByStage } from './enemies'
+import { getEnemyById } from './enemies'
+import { createDungeonMap, getMapNode, getStageForScreen, normalizeSeed } from './map'
+import { relics, relicsById } from './relics'
 import type {
   BattleEffect,
   CardDefinition,
   EnemyAction,
+  EnemyPhase,
   EnemyState,
   GameState,
+  MapNode,
   PlayerState,
   RandomSource,
+  RelicDefinition,
   ResultType,
 } from './types'
 
 const baseMaxEnergy = 3
 const maxHandSize = 3
-const maxLogCount = 16
+const maxLogCount = 18
+const normalBattleGold = 18
+const eliteBattleGold = 35
+const shopCardCost = 20
+const shopRelicCost = 40
 
 type BattleEffectDraft = Omit<BattleEffect, 'id'>
 
@@ -23,6 +32,7 @@ function createPlayerState(): PlayerState {
     maxHp: 50,
     block: 0,
     poison: 0,
+    vulnerable: 0,
     attackBonus: 0,
     pendingDrawPenalty: 0,
     pendingEnergyPenalty: 0,
@@ -34,14 +44,18 @@ function createPlayerState(): PlayerState {
 function normalizePlayerState(player: PlayerState): PlayerState {
   return {
     ...player,
+    poison: player.poison ?? 0,
+    vulnerable: player.vulnerable ?? 0,
+    attackBonus: player.attackBonus ?? 0,
+    pendingDrawPenalty: player.pendingDrawPenalty ?? 0,
     pendingEnergyPenalty: player.pendingEnergyPenalty ?? 0,
     pendingEnergyPenaltyTurns: player.pendingEnergyPenaltyTurns ?? 0,
     reflectDamage: player.reflectDamage ?? false,
   }
 }
 
-function createEnemyState(stage: number): EnemyState {
-  const enemy = getEnemyByStage(stage)
+function createEnemyState(enemyId: string): EnemyState {
+  const enemy = getEnemyById(enemyId)
 
   return {
     id: enemy.id,
@@ -50,35 +64,40 @@ function createEnemyState(stage: number): EnemyState {
     maxHp: enemy.maxHp,
     block: 0,
     poison: 0,
+    vulnerable: 0,
     actionIndex: 0,
-    behaviorMode: enemy.behaviorMode,
-    actions: enemy.actions,
+    kind: enemy.kind,
+    phases: enemy.phases,
   }
 }
 
 function normalizeEnemyState(enemy: EnemyState): EnemyState {
-  const definition = enemiesById[enemy.id]
+  const definition = getEnemyById(enemy.id)
 
   return {
     ...enemy,
-    behaviorMode: enemy.behaviorMode ?? definition.behaviorMode,
-    actions: enemy.actions ?? definition.actions,
+    poison: enemy.poison ?? 0,
+    vulnerable: enemy.vulnerable ?? 0,
+    kind: enemy.kind ?? definition.kind,
+    phases: enemy.phases ?? definition.phases,
   }
 }
 
 function normalizeBattleState(state: GameState): GameState {
-  const player = normalizePlayerState(state.player)
-  const maxEnergy = state.maxEnergy ?? baseMaxEnergy
-
   return {
     ...state,
-    maxEnergy,
-    energy: state.energy ?? getTurnEnergy(player, maxEnergy),
-    player,
+    maxEnergy: state.maxEnergy ?? baseMaxEnergy,
+    gold: state.gold ?? 0,
+    player: normalizePlayerState(state.player),
     enemy: normalizeEnemyState(state.enemy),
+    rewardOptions: state.rewardOptions ?? [],
     battleEffects: state.battleEffects ?? [],
     effectSequence: state.effectSequence ?? 0,
     playerImpactKey: state.playerImpactKey ?? 0,
+    relics: state.relics ?? [],
+    shopCards: state.shopCards ?? [],
+    shopRelic: state.shopRelic ?? null,
+    earnedRelic: state.earnedRelic ?? null,
   }
 }
 
@@ -114,6 +133,10 @@ function finalizeBattleState(state: GameState, drafts: BattleEffectDraft[], play
     effectSequence,
     playerImpactKey,
   }
+}
+
+function getRelicList(relicIds: string[]) {
+  return relicIds.map((relicId) => relicsById[relicId]).filter(Boolean)
 }
 
 function getTurnEnergy(player: PlayerState, maxEnergy: number) {
@@ -182,12 +205,11 @@ function applyPoison<T extends { hp: number; poison: number }>(target: T) {
   }
 }
 
-function getEnemyActions(enemy: EnemyState) {
-  return enemy.actions ?? enemiesById[enemy.id].actions
-}
-
-function getEnemyBehaviorMode(enemy: EnemyState) {
-  return enemy.behaviorMode ?? enemiesById[enemy.id].behaviorMode
+function decayVulnerable<T extends { vulnerable: number }>(target: T) {
+  return {
+    ...target,
+    vulnerable: Math.max(0, target.vulnerable - 1),
+  }
 }
 
 function drawHand(deck: CardDefinition[], player: PlayerState, random: RandomSource) {
@@ -202,6 +224,66 @@ function drawHand(deck: CardDefinition[], player: PlayerState, random: RandomSou
   }
 }
 
+function getBattleStartBlock(relicIds: string[]) {
+  return getRelicList(relicIds).reduce((total, relic) => total + (relic.effect.battleStartBlock ?? 0), 0)
+}
+
+function getBonusPoison(relicIds: string[]) {
+  return getRelicList(relicIds).reduce((total, relic) => total + (relic.effect.bonusPoison ?? 0), 0)
+}
+
+function getBonusDamageAgainstVulnerable(relicIds: string[], enemy: EnemyState) {
+  if (enemy.vulnerable <= 0) {
+    return 0
+  }
+
+  return getRelicList(relicIds).reduce((total, relic) => total + (relic.effect.bonusDamageAgainstVulnerable ?? 0), 0)
+}
+
+function getTurnStartRelicBlock(relicIds: string[], enemy: EnemyState) {
+  if (enemy.poison <= 0) {
+    return 0
+  }
+
+  return getRelicList(relicIds).reduce((total, relic) => total + (relic.effect.turnStartBlockIfEnemyPoisoned ?? 0), 0)
+}
+
+function getScaledDamage(baseDamage: number, vulnerable: number, bonusDamage: number) {
+  const scaledDamage = vulnerable > 0 ? Math.ceil(baseDamage * 1.5) : baseDamage
+
+  return scaledDamage + bonusDamage
+}
+
+function getEncounterGold(node: MapNode | null) {
+  if (!node) {
+    return 0
+  }
+
+  if (node.type === 'elite') {
+    return eliteBattleGold
+  }
+
+  if (node.type === 'battle') {
+    return normalBattleGold
+  }
+
+  return 0
+}
+
+function getAvailableRelics(relicIds: string[]) {
+  return relics.filter((relic) => !relicIds.includes(relic.id))
+}
+
+function pickRelic(relicIds: string[], random: RandomSource) {
+  const pool = getAvailableRelics(relicIds)
+
+  if (pool.length === 0) {
+    return null
+  }
+
+  return (sampleWithoutReplacement(pool, 1, random)[0] ?? null) as RelicDefinition | null
+}
+
 function createResultState(state: GameState, result: ResultType, message: string): GameState {
   return {
     ...state,
@@ -209,60 +291,69 @@ function createResultState(state: GameState, result: ResultType, message: string
     hand: [],
     rewardOptions: [],
     battleEffects: [],
+    shopCards: [],
+    shopRelic: null,
+    earnedRelic: null,
     result,
-    stats: {
-      ...state.stats,
-      turns: Math.max(state.stats.turns, 1),
-    },
     logs: addLogs(state.logs, [message]),
   }
 }
 
-function createRewardState(state: GameState, random: RandomSource): GameState {
-  if (state.stage >= state.totalStages) {
-    return createResultState(state, 'clear', '던전 보스를 쓰러뜨렸습니다. 모험을 완수했습니다.')
-  }
+function getActiveEnemyPhase(enemy: EnemyState) {
+  const ratio = enemy.hp / enemy.maxHp
+  const phases = [...enemy.phases].sort((left, right) => right.minHpRatio - left.minHpRatio)
 
-  return {
-    ...state,
-    screen: 'reward',
-    hand: [],
-    rewardOptions: sampleWithoutReplacement(rewardCards, 3, random),
-    battleEffects: [],
-    logs: addLogs(state.logs, [`${state.enemy.name}을(를) 처치했습니다.`, '보상 카드를 선택하세요.']),
-  }
+  return phases.find((phase) => ratio >= phase.minHpRatio) ?? phases[phases.length - 1]
 }
 
-function prepareTurnStart(player: PlayerState, maxEnergy: number, deck: CardDefinition[], random: RandomSource) {
+function prepareTurnStart(
+  player: PlayerState,
+  enemy: EnemyState,
+  maxEnergy: number,
+  deck: CardDefinition[],
+  relicIds: string[],
+  random: RandomSource,
+) {
   const refreshedPlayer = {
     ...player,
     block: 0,
     reflectDamage: false,
   }
   const energy = getTurnEnergy(refreshedPlayer, maxEnergy)
-  const settledPlayer = advanceEnergyPenalty(refreshedPlayer)
+  let settledPlayer = advanceEnergyPenalty(refreshedPlayer)
+  const logs: string[] = []
+  const relicBlock = getTurnStartRelicBlock(relicIds, enemy)
+
+  if (relicBlock > 0) {
+    settledPlayer = {
+      ...settledPlayer,
+      block: settledPlayer.block + relicBlock,
+    }
+    logs.push(`잔불 반지: 방어도 ${relicBlock}를 얻습니다.`)
+  }
+
   const { hand, player: drawnPlayer } = drawHand(deck, settledPlayer, random)
 
   return {
     hand,
     energy,
     player: drawnPlayer,
+    logs,
   }
 }
 
 function prepareNextTurn(state: GameState, random: RandomSource): GameState {
-  const turnStart = prepareTurnStart(state.player, state.maxEnergy, state.deck, random)
+  const turnStart = prepareTurnStart(state.player, state.enemy, state.maxEnergy, state.deck, state.relics, random)
 
   return {
     ...state,
     hand: turnStart.hand,
     energy: turnStart.energy,
     player: turnStart.player,
-    enemy: {
-      ...state.enemy,
-      block: 0,
-    },
-    logs: addLogs(state.logs, [`${state.stats.turns + 1}턴 시작, 카드 ${turnStart.hand.length}장을 뽑았습니다.`]),
+    logs: addLogs(
+      state.logs,
+      [`${state.stats.turns + 1}턴 시작, 카드 ${turnStart.hand.length}장을 뽑습니다.`, ...turnStart.logs],
+    ),
     stats: {
       ...state.stats,
       turns: state.stats.turns + 1,
@@ -270,33 +361,131 @@ function prepareNextTurn(state: GameState, random: RandomSource): GameState {
   }
 }
 
-function beginBattle(
-  stage: number,
-  deck: CardDefinition[],
-  player: PlayerState,
-  stats: GameState['stats'],
-  logs: string[],
-  random: RandomSource,
-): GameState {
-  const turnStart = prepareTurnStart(normalizePlayerState(player), baseMaxEnergy, deck, random)
+function openMapState(state: GameState, logs: string[]) {
+  const map = {
+    ...state.map,
+    clearedNodeIds: state.currentNode
+      ? [...new Set([...state.map.clearedNodeIds, state.currentNode.id])]
+      : state.map.clearedNodeIds,
+    availableNodeIds: state.currentNode?.nextNodeIds ?? state.map.availableNodeIds,
+  }
 
   return {
+    ...state,
+    screen: 'map' as const,
+    stage: getStageForScreen(map, null),
+    hand: [],
+    rewardOptions: [],
+    battleEffects: [],
+    currentNode: null,
+    earnedRelic: null,
+    shopCards: [],
+    shopRelic: null,
+    map,
+    logs: addLogs(state.logs, logs),
+  }
+}
+
+function createRewardState(state: GameState, random: RandomSource): GameState {
+  if (state.currentNode?.type === 'boss') {
+    return createResultState(state, 'clear', '던전 보스를 쓰러뜨렸습니다. 탐험을 완수했습니다.')
+  }
+
+  const goldEarned = getEncounterGold(state.currentNode)
+  const earnedRelic = state.currentNode?.type === 'elite' ? pickRelic(state.relics, random) : null
+  const relics = earnedRelic ? [...state.relics, earnedRelic.id] : state.relics
+
+  return {
+    ...state,
+    screen: 'reward',
+    hand: [],
+    rewardOptions: sampleWithoutReplacement(rewardCards, 3, random),
+    battleEffects: [],
+    gold: state.gold + goldEarned,
+    relics,
+    earnedRelic,
+    stats: {
+      ...state.stats,
+      battlesWon: state.stats.battlesWon + 1,
+      elitesWon: state.stats.elitesWon + (state.currentNode?.type === 'elite' ? 1 : 0),
+    },
+    logs: addLogs(
+      state.logs,
+      [
+        `${state.enemy.name}을 쓰러뜨렸습니다.`,
+        `${goldEarned} 골드를 획득했습니다.`,
+        ...(earnedRelic ? [`${earnedRelic.name} 유물을 획득했습니다.`] : []),
+        '보상 카드를 선택하세요.',
+      ],
+    ),
+  }
+}
+
+function beginBattle(state: GameState, node: MapNode, random: RandomSource): GameState {
+  const enemy = createEnemyState(node.enemyId ?? 'slime')
+  let player = normalizePlayerState(state.player)
+  const logs = [`${node.row + 1}층 ${node.type === 'elite' ? '엘리트' : node.type === 'boss' ? '보스' : '전투'} 구역에 진입했습니다.`]
+  const battleStartBlock = getBattleStartBlock(state.relics)
+
+  if (battleStartBlock > 0) {
+    player = {
+      ...player,
+      block: player.block + battleStartBlock,
+    }
+    logs.push(`전투 토템: 방어도 ${battleStartBlock}를 얻습니다.`)
+  }
+
+  const turnStart = prepareTurnStart(player, enemy, baseMaxEnergy, state.deck, state.relics, random)
+
+  return {
+    ...state,
     screen: 'battle',
-    stage,
-    totalStages: enemies.length,
+    stage: node.row + 1,
+    totalStages: state.map.rows.length,
     energy: turnStart.energy,
     maxEnergy: baseMaxEnergy,
     player: turnStart.player,
-    enemy: createEnemyState(stage),
-    deck,
+    enemy,
     hand: turnStart.hand,
     rewardOptions: [],
     battleEffects: [],
     effectSequence: 0,
     playerImpactKey: 0,
-    logs: addLogs(logs, [`${stage} 스테이지 전투가 시작됩니다.`, `${stats.turns + 1}턴 시작, 카드 ${turnStart.hand.length}장을 뽑았습니다.`]),
+    currentNode: node,
+    earnedRelic: null,
+    shopCards: [],
+    shopRelic: null,
+    logs: addLogs(
+      state.logs,
+      [...logs, `${enemy.name}이(가) 모습을 드러냈습니다.`, `1턴 시작, 카드 ${turnStart.hand.length}장을 뽑습니다.`, ...turnStart.logs],
+    ),
     result: null,
-    stats,
+    stats: {
+      ...state.stats,
+      turns: state.stats.turns + 1,
+    },
+  }
+}
+
+function openRest(state: GameState, node: MapNode): GameState {
+  return {
+    ...state,
+    screen: 'rest',
+    stage: node.row + 1,
+    currentNode: node,
+    logs: addLogs(state.logs, ['모닥불 앞에서 잠시 숨을 고릅니다.']),
+  }
+}
+
+function openShop(state: GameState, node: MapNode, random: RandomSource): GameState {
+  return {
+    ...state,
+    screen: 'shop',
+    stage: node.row + 1,
+    currentNode: node,
+    shopCards: sampleWithoutReplacement(rewardCards, 3, random),
+    shopRelic: pickRelic(state.relics, random),
+    logs: addLogs(state.logs, ['행상인이 희귀한 카드와 유물을 늘어놓았습니다.']),
   }
 }
 
@@ -304,19 +493,20 @@ function hasPlayableCard(state: GameState) {
   return state.hand.some((card) => card.cost <= state.energy)
 }
 
-function resolveCopiedAction(player: PlayerState, enemy: EnemyState, action: EnemyAction) {
+function resolveCopiedAction(player: PlayerState, enemy: EnemyState, action: EnemyAction, relicIds: string[]) {
   const logs: string[] = []
   const effects: BattleEffectDraft[] = []
 
-  if (action.type === 'attack' || action.type === 'heavyAttack') {
-    const damageResult = applyDamage(enemy, action.value)
+  if (action.type === 'attack') {
+    const totalDamage = getScaledDamage(action.value, enemy.vulnerable, getBonusDamageAgainstVulnerable(relicIds, enemy))
+    const damageResult = applyDamage(enemy, totalDamage)
 
     enemy = damageResult.target
-    logs.push(`흉내: ${enemy.name}에게 피해 ${action.value}를 줍니다.`)
+    logs.push(`흉내: ${enemy.name}에게 피해 ${totalDamage}을 줍니다.`)
     effects.push({
       target: 'enemy',
       tone: 'damage',
-      value: action.value,
+      value: totalDamage,
     })
   }
 
@@ -329,11 +519,21 @@ function resolveCopiedAction(player: PlayerState, enemy: EnemyState, action: Ene
   }
 
   if (action.type === 'poison') {
+    const poison = action.value + getBonusPoison(relicIds)
+
     enemy = {
       ...enemy,
-      poison: enemy.poison + action.value,
+      poison: enemy.poison + poison,
     }
-    logs.push(`흉내: ${enemy.name}에게 중독 ${action.value}를 부여합니다.`)
+    logs.push(`흉내: ${enemy.name}에게 중독 ${poison}을 부여합니다.`)
+  }
+
+  if (action.type === 'vulnerable') {
+    enemy = {
+      ...enemy,
+      vulnerable: enemy.vulnerable + action.value,
+    }
+    logs.push(`흉내: ${enemy.name}에게 취약 ${action.value}를 부여합니다.`)
   }
 
   return {
@@ -344,7 +544,7 @@ function resolveCopiedAction(player: PlayerState, enemy: EnemyState, action: Ene
   }
 }
 
-function resolveCard(state: GameState, card: CardDefinition, random: RandomSource) {
+function resolveCard(state: GameState, card: CardDefinition) {
   let player = state.player
   let enemy = state.enemy
   const logs: string[] = []
@@ -368,8 +568,9 @@ function resolveCard(state: GameState, card: CardDefinition, random: RandomSourc
     player = {
       ...player,
       poison: 0,
+      vulnerable: Math.max(0, player.vulnerable - 1),
     }
-    logs.push(`${card.name}: 중독이 제거되었습니다.`)
+    logs.push(`${card.name}: 약화 상태를 정리합니다.`)
   }
 
   if (effect.block) {
@@ -385,7 +586,7 @@ function resolveCard(state: GameState, card: CardDefinition, random: RandomSourc
       ...player,
       reflectDamage: true,
     }
-    logs.push(`${card.name}: 이번 턴 피해 반사가 활성화됩니다.`)
+    logs.push(`${card.name}: 이번 턴에 받은 피해를 반사합니다.`)
   }
 
   if (effect.heal) {
@@ -404,15 +605,25 @@ function resolveCard(state: GameState, card: CardDefinition, random: RandomSourc
   }
 
   if (effect.poison) {
+    const poison = effect.poison + getBonusPoison(state.relics)
+
     enemy = {
       ...enemy,
-      poison: enemy.poison + effect.poison,
+      poison: enemy.poison + poison,
     }
-    logs.push(`${card.name}: ${enemy.name}에게 중독 ${effect.poison}를 부여합니다.`)
+    logs.push(`${card.name}: ${enemy.name}에게 중독 ${poison}을 부여합니다.`)
+  }
+
+  if (effect.vulnerable) {
+    enemy = {
+      ...enemy,
+      vulnerable: enemy.vulnerable + effect.vulnerable,
+    }
+    logs.push(`${card.name}: ${enemy.name}에게 취약 ${effect.vulnerable}를 부여합니다.`)
   }
 
   if (effect.mimicNext) {
-    const copied = resolveCopiedAction(player, enemy, getNextEnemyAction(enemy, random))
+    const copied = resolveCopiedAction(player, enemy, getNextEnemyAction(enemy), state.relics)
 
     player = copied.player
     enemy = copied.enemy
@@ -420,17 +631,17 @@ function resolveCard(state: GameState, card: CardDefinition, random: RandomSourc
     effects.push(...copied.effects)
   }
 
-  const isAttack = card.type === 'attack'
-  const baseDamage = effect.useBlockAsDamage
-    ? player.block
-    : (effect.damage ?? 0) * (effect.repeat ?? 1)
-
-  if (isAttack) {
-    const totalDamage = baseDamage + player.attackBonus
+  if (card.type === 'attack') {
+    const baseDamage = effect.useBlockAsDamage ? player.block : (effect.damage ?? 0) * (effect.repeat ?? 1)
+    const totalDamage = getScaledDamage(
+      baseDamage + player.attackBonus,
+      enemy.vulnerable,
+      getBonusDamageAgainstVulnerable(state.relics, enemy),
+    )
     const damageResult = applyDamage(enemy, totalDamage)
 
     enemy = damageResult.target
-    logs.push(`${card.name}: ${enemy.name}에게 피해 ${totalDamage}를 줍니다.`)
+    logs.push(`${card.name}: ${enemy.name}에게 피해 ${totalDamage}을 줍니다.`)
     effects.push({
       target: 'enemy',
       tone: 'damage',
@@ -443,7 +654,7 @@ function resolveCard(state: GameState, card: CardDefinition, random: RandomSourc
       player = healed.player
 
       if (healed.restored > 0) {
-        logs.push(`${card.name}: 흡수 효과로 체력 ${healed.restored}를 회복합니다.`)
+        logs.push(`${card.name}: 체력 ${healed.restored}를 흡수합니다.`)
         effects.push({
           target: 'player',
           tone: 'heal',
@@ -480,7 +691,7 @@ function resolveCard(state: GameState, card: CardDefinition, random: RandomSourc
       pendingEnergyPenalty: player.pendingEnergyPenalty + effect.energyPenalty,
       pendingEnergyPenaltyTurns: Math.max(player.pendingEnergyPenaltyTurns, effect.energyPenaltyTurns),
     }
-    logs.push(`${card.name}: 다음 ${effect.energyPenaltyTurns}턴 동안 에너지가 ${effect.energyPenalty} 줄어듭니다.`)
+    logs.push(`${card.name}: 다음 ${effect.energyPenaltyTurns}턴 동안 에너지가 ${effect.energyPenalty} 감소합니다.`)
   }
 
   return {
@@ -491,29 +702,15 @@ function resolveCard(state: GameState, card: CardDefinition, random: RandomSourc
   }
 }
 
-export function getNextEnemyAction(enemy: EnemyState, random: RandomSource = Math.random): EnemyAction {
-  const actions = getEnemyActions(normalizeEnemyState(enemy))
+export function getNextEnemyAction(enemy: EnemyState): EnemyAction {
+  const normalizedEnemy = normalizeEnemyState(enemy)
+  const phase = getActiveEnemyPhase(normalizedEnemy)
 
-  if (getEnemyBehaviorMode(enemy) === 'sequential') {
-    return actions[enemy.actionIndex % actions.length]
-  }
-
-  const totalWeight = actions.reduce((sum, action) => sum + (action.weight ?? 1), 0)
-  let cursor = random() * totalWeight
-
-  for (const action of actions) {
-    cursor -= action.weight ?? 1
-
-    if (cursor < 0) {
-      return action
-    }
-  }
-
-  return actions[actions.length - 1]
+  return phase.actions[normalizedEnemy.actionIndex % phase.actions.length]
 }
 
-function runEnemyTurn(state: GameState, random: RandomSource) {
-  const action = getNextEnemyAction(state.enemy, random)
+function runEnemyTurn(state: GameState) {
+  const action = getNextEnemyAction(state.enemy)
   let player = state.player
   let enemy = {
     ...state.enemy,
@@ -523,15 +720,16 @@ function runEnemyTurn(state: GameState, random: RandomSource) {
   const effects: BattleEffectDraft[] = []
   let playerHit = false
 
-  if (action.type === 'attack' || action.type === 'heavyAttack') {
-    const damageResult = applyDamage(player, action.value)
+  if (action.type === 'attack') {
+    const totalDamage = getScaledDamage(action.value, player.vulnerable, 0)
+    const damageResult = applyDamage(player, totalDamage)
 
     player = damageResult.target
-    logs.push(`${state.enemy.name} ${action.label}: 피해 ${action.value}를 받습니다.`)
+    logs.push(`${state.enemy.name} ${action.label}: 피해 ${totalDamage}을 받습니다.`)
     effects.push({
       target: 'player',
       tone: 'damage',
-      value: action.value,
+      value: totalDamage,
     })
     playerHit = true
 
@@ -539,7 +737,7 @@ function runEnemyTurn(state: GameState, random: RandomSource) {
       const reflected = applyDamage(enemy, damageResult.totalDamage)
 
       enemy = reflected.target
-      logs.push(`가시 갑옷: ${enemy.name}에게 피해 ${damageResult.totalDamage}를 반사합니다.`)
+      logs.push(`가시 갑옷: ${enemy.name}에게 피해 ${damageResult.totalDamage}을 반사합니다.`)
       effects.push({
         target: 'enemy',
         tone: 'damage',
@@ -564,6 +762,14 @@ function runEnemyTurn(state: GameState, random: RandomSource) {
     logs.push(`${state.enemy.name} ${action.label}: 중독 ${action.value}를 받습니다.`)
   }
 
+  if (action.type === 'vulnerable') {
+    player = {
+      ...player,
+      vulnerable: player.vulnerable + action.value,
+    }
+    logs.push(`${state.enemy.name} ${action.label}: 취약 ${action.value}를 받습니다.`)
+  }
+
   return {
     player,
     enemy,
@@ -581,7 +787,7 @@ function runEndTurn(state: GameState) {
 
   const playerPoison = applyPoison(player)
 
-  player = playerPoison.target
+  player = decayVulnerable(playerPoison.target)
 
   if (playerPoison.damage > 0) {
     logs.push(`플레이어가 중독 피해 ${playerPoison.damage}를 받습니다.`)
@@ -594,7 +800,7 @@ function runEndTurn(state: GameState) {
 
   const enemyPoison = applyPoison(enemy)
 
-  enemy = enemyPoison.target
+  enemy = decayVulnerable(enemyPoison.target)
 
   if (enemyPoison.damage > 0) {
     logs.push(`${enemy.name}이(가) 중독 피해 ${enemyPoison.damage}를 받습니다.`)
@@ -616,8 +822,7 @@ function runEndTurn(state: GameState) {
 function finishTurn(state: GameState, random: RandomSource, initialEffects: BattleEffectDraft[] = []) {
   let nextState = state
   const effects = [...initialEffects]
-
-  const enemyTurn = runEnemyTurn(nextState, random)
+  const enemyTurn = runEnemyTurn(nextState)
 
   nextState = {
     ...nextState,
@@ -628,7 +833,7 @@ function finishTurn(state: GameState, random: RandomSource, initialEffects: Batt
   effects.push(...enemyTurn.effects)
 
   if (nextState.player.hp <= 0) {
-    return createResultState(nextState, 'gameover', `${nextState.enemy.name}에게 쓰러졌습니다.`)
+    return createResultState(nextState, 'gameover', `${nextState.enemy.name}에게 패배했습니다.`)
   }
 
   if (nextState.enemy.hp <= 0) {
@@ -646,7 +851,7 @@ function finishTurn(state: GameState, random: RandomSource, initialEffects: Batt
   effects.push(...endTurn.effects)
 
   if (nextState.player.hp <= 0) {
-    return createResultState(nextState, 'gameover', '중독으로 쓰러졌습니다.')
+    return createResultState(nextState, 'gameover', '중독에 쓰러졌습니다.')
   }
 
   if (nextState.enemy.hp <= 0) {
@@ -657,14 +862,17 @@ function finishTurn(state: GameState, random: RandomSource, initialEffects: Batt
 }
 
 export function createWelcomeState(): GameState {
+  const map = createDungeonMap(20260506)
+
   return {
     screen: 'start',
     stage: 1,
-    totalStages: enemies.length,
+    totalStages: map.rows.length,
     energy: baseMaxEnergy,
     maxEnergy: baseMaxEnergy,
+    gold: 30,
     player: createPlayerState(),
-    enemy: createEnemyState(1),
+    enemy: createEnemyState('slime'),
     deck: [...starterCards],
     hand: [],
     rewardOptions: [],
@@ -676,22 +884,73 @@ export function createWelcomeState(): GameState {
     stats: {
       turns: 0,
       cardsEarned: 0,
+      battlesWon: 0,
+      elitesWon: 0,
     },
+    relics: [],
+    map,
+    currentNode: null,
+    earnedRelic: null,
+    shopCards: [],
+    shopRelic: null,
   }
 }
 
-export function startGame(random: RandomSource = Math.random) {
-  return beginBattle(
-    1,
-    [...starterCards],
-    createPlayerState(),
-    {
+export function startGame(seed?: number | string) {
+  const map = createDungeonMap(normalizeSeed(seed))
+
+  return {
+    screen: 'map',
+    stage: getStageForScreen(map, null),
+    totalStages: map.rows.length,
+    energy: baseMaxEnergy,
+    maxEnergy: baseMaxEnergy,
+    gold: 30,
+    player: createPlayerState(),
+    enemy: createEnemyState('slime'),
+    deck: [...starterCards],
+    hand: [],
+    rewardOptions: [],
+    battleEffects: [],
+    effectSequence: 0,
+    playerImpactKey: 0,
+    logs: [`시드 ${map.seed}로 던전을 생성했습니다.`],
+    result: null,
+    stats: {
       turns: 0,
       cardsEarned: 0,
+      battlesWon: 0,
+      elitesWon: 0,
     },
-    ['던전으로 들어섭니다.'],
-    random,
-  )
+    relics: [],
+    map,
+    currentNode: null,
+    earnedRelic: null,
+    shopCards: [],
+    shopRelic: null,
+  } satisfies GameState
+}
+
+export function selectMapNode(state: GameState, nodeId: string, random: RandomSource = Math.random) {
+  if (state.screen !== 'map' || !state.map.availableNodeIds.includes(nodeId)) {
+    return state
+  }
+
+  const node = getMapNode(state.map, nodeId)
+
+  if (!node) {
+    return state
+  }
+
+  if (node.type === 'rest') {
+    return openRest(state, node)
+  }
+
+  if (node.type === 'shop') {
+    return openShop(state, node, random)
+  }
+
+  return beginBattle(state, node, random)
 }
 
 export function useCard(state: GameState, cardId: string, random: RandomSource = Math.random) {
@@ -714,7 +973,7 @@ export function useCard(state: GameState, cardId: string, random: RandomSource =
   }
 
   const hand = normalizedState.hand.filter((_, index) => index !== cardIndex)
-  const resolved = resolveCard(normalizedState, selected, random)
+  const resolved = resolveCard(normalizedState, selected)
   const nextState: GameState = {
     ...normalizedState,
     hand,
@@ -749,26 +1008,13 @@ export function endTurn(state: GameState, random: RandomSource = Math.random) {
   return finishTurn(normalizedState, random)
 }
 
-export function selectRewardCard(state: GameState, cardId: string | null, random: RandomSource = Math.random) {
+export function selectRewardCard(state: GameState, cardId: string | null) {
   if (state.screen !== 'reward') {
     return state
   }
 
   if (cardId === null) {
-    return beginBattle(
-      state.stage + 1,
-      [...state.deck],
-      {
-        ...normalizePlayerState(state.player),
-        block: 0,
-        poison: 0,
-        attackBonus: 0,
-        reflectDamage: false,
-      },
-      state.stats,
-      addLogs(state.logs, ['보상을 받지 않고 지나갑니다.']),
-      random,
-    )
+    return openMapState(state, ['보상 카드를 건너뛰고 다음 길을 고릅니다.'])
   }
 
   const selected = state.rewardOptions.find((card) => card.id === cardId)
@@ -777,39 +1023,89 @@ export function selectRewardCard(state: GameState, cardId: string | null, random
     return state
   }
 
-  return beginBattle(
-    state.stage + 1,
-    [...state.deck, selected],
+  return openMapState(
     {
-      ...normalizePlayerState(state.player),
-      block: 0,
-      poison: 0,
-      attackBonus: 0,
-      reflectDamage: false,
+      ...state,
+      deck: [...state.deck, selected],
+      stats: {
+        ...state.stats,
+        cardsEarned: state.stats.cardsEarned + 1,
+      },
     },
-    {
-      ...state.stats,
-      cardsEarned: state.stats.cardsEarned + 1,
-    },
-    addLogs(state.logs, [`${selected.name} 카드를 덱에 추가했습니다.`]),
-    random,
+    [`${selected.name} 카드를 덱에 추가했습니다.`],
   )
 }
 
-export function getEnemyIntent(enemy: EnemyState): EnemyAction {
-  const normalizedEnemy = normalizeEnemyState(enemy)
-
-  if (getEnemyBehaviorMode(normalizedEnemy) === 'weighted_random') {
-    return {
-      type: 'attack',
-      value: 0,
-      label: '예측 불가',
-    }
+export function resolveRest(state: GameState) {
+  if (state.screen !== 'rest') {
+    return state
   }
 
-  return getNextEnemyAction(normalizedEnemy, () => 0)
+  const healed = healPlayer(normalizePlayerState(state.player), 12)
+
+  return openMapState(
+    {
+      ...state,
+      player: healed.player,
+    },
+    [`모닥불 휴식으로 체력 ${healed.restored}를 회복했습니다.`],
+  )
+}
+
+export function buyShopCard(state: GameState, cardId: string) {
+  if (state.screen !== 'shop' || state.gold < shopCardCost) {
+    return state
+  }
+
+  const selected = state.shopCards.find((card) => card.id === cardId)
+
+  if (!selected) {
+    return state
+  }
+
+  return {
+    ...state,
+    gold: state.gold - shopCardCost,
+    deck: [...state.deck, selected],
+    shopCards: state.shopCards.filter((card) => card.id !== cardId),
+    logs: addLogs(state.logs, [`${selected.name} 카드를 구입했습니다.`]),
+  }
+}
+
+export function buyShopRelic(state: GameState, relicId: string) {
+  if (state.screen !== 'shop' || state.gold < shopRelicCost || !state.shopRelic || state.shopRelic.id !== relicId) {
+    return state
+  }
+
+  return {
+    ...state,
+    gold: state.gold - shopRelicCost,
+    relics: state.relics.includes(relicId) ? state.relics : [...state.relics, relicId],
+    shopRelic: null,
+    logs: addLogs(state.logs, [`${relicsById[relicId].name} 유물을 구입했습니다.`]),
+  }
+}
+
+export function leaveShop(state: GameState) {
+  if (state.screen !== 'shop') {
+    return state
+  }
+
+  return openMapState(state, ['상점을 떠나 다음 길로 향합니다.'])
+}
+
+export function getEnemyIntent(enemy: EnemyState): EnemyAction {
+  return getNextEnemyAction(normalizeEnemyState(enemy))
+}
+
+export function getRelicById(relicId: string): RelicDefinition {
+  return relicsById[relicId]
 }
 
 export function getCardById(cardId: string) {
   return cardsById[cardId]
+}
+
+export function getEnemyPhase(enemy: EnemyState): EnemyPhase {
+  return getActiveEnemyPhase(normalizeEnemyState(enemy))
 }

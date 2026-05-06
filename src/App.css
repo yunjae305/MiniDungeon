@@ -184,6 +184,27 @@
   gap: 10px;
 }
 
+.seed-field {
+  display: grid;
+  gap: 10px;
+}
+
+.seed-field span {
+  color: var(--text-muted);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+}
+
+.seed-field input {
+  min-height: 52px;
+  padding: 0 16px;
+  border: 1px solid rgba(244, 216, 177, 0.16);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-strong);
+}
+
 .starter-stack span {
   display: inline-flex;
   padding: 10px 14px;
@@ -253,6 +274,13 @@
   gap: 20px;
 }
 
+.map-screen,
+.shop-screen,
+.rest-screen,
+.reward-screen {
+  gap: 20px;
+}
+
 .battle-banner {
   display: flex;
   justify-content: space-between;
@@ -312,6 +340,29 @@
 
 .enemy-chip {
   color: #f3d7a7;
+}
+
+.intent-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(244, 216, 177, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-strong);
+}
+
+.intent-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(240, 199, 123, 0.18);
+  color: var(--accent);
+  font-weight: 700;
 }
 
 .hp-track {
@@ -416,6 +467,142 @@
   gap: 18px;
 }
 
+.relic-panel,
+.map-panel {
+  display: grid;
+  gap: 18px;
+}
+
+.relic-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+.relic-card,
+.empty-panel-copy {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(244, 216, 177, 0.12);
+  background:
+    radial-gradient(circle at top, rgba(240, 199, 123, 0.16), transparent 44%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
+    rgba(0, 0, 0, 0.16);
+}
+
+.relic-card strong {
+  color: var(--text-strong);
+  font-family: var(--font-display);
+}
+
+.relic-card span,
+.empty-copy,
+.empty-panel-copy {
+  color: var(--text-soft);
+  line-height: 1.6;
+}
+
+.map-rows {
+  display: grid;
+  gap: 16px;
+}
+
+.map-row {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+}
+
+.map-floor-label {
+  color: var(--text-muted);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+}
+
+.map-node-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.map-node {
+  display: grid;
+  gap: 8px;
+  min-height: 110px;
+  padding: 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(244, 216, 177, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-soft);
+  text-align: left;
+  transition: transform 180ms ease, border-color 180ms ease, opacity 180ms ease;
+}
+
+.map-node strong {
+  color: var(--text-strong);
+  font-family: var(--font-display);
+}
+
+.map-node.is-available {
+  border-color: rgba(240, 199, 123, 0.34);
+  transform: translateY(-2px);
+}
+
+.map-node.is-cleared {
+  opacity: 0.48;
+}
+
+.map-node-mark {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.map-elite {
+  background:
+    radial-gradient(circle at top, rgba(210, 102, 67, 0.24), transparent 40%),
+    rgba(255, 255, 255, 0.04);
+}
+
+.map-shop {
+  background:
+    radial-gradient(circle at top, rgba(80, 140, 190, 0.24), transparent 40%),
+    rgba(255, 255, 255, 0.04);
+}
+
+.map-rest {
+  background:
+    radial-gradient(circle at top, rgba(120, 172, 102, 0.24), transparent 40%),
+    rgba(255, 255, 255, 0.04);
+}
+
+.map-boss {
+  background:
+    radial-gradient(circle at top, rgba(180, 78, 66, 0.28), transparent 40%),
+    rgba(255, 255, 255, 0.04);
+}
+
+.shop-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(280px, 0.7fr);
+  gap: 18px;
+}
+
+.relic-shop-card,
+.reward-relic-card {
+  width: 100%;
+}
+
 .card-list,
 .reward-grid,
 .deck-list {
@@ -516,6 +703,10 @@
 
 .reward-copy {
   margin-bottom: 6px;
+}
+
+.reward-relic-panel {
+  gap: 14px;
 }
 
 .deck-overlay {
@@ -703,7 +894,12 @@ button:disabled {
   .battle-grid,
   .start-grid,
   .result-grid,
-  .reward-grid {
+  .reward-grid,
+  .shop-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .map-row {
     grid-template-columns: 1fr;
   }
 
@@ -733,7 +929,9 @@ button:disabled {
   }
 
   .card-list,
-  .deck-list {
+  .deck-list,
+  .map-node-row,
+  .relic-grid {
     grid-template-columns: 1fr;
   }
 

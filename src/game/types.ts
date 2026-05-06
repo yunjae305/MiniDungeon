@@ -5,6 +5,7 @@ export type CardEffect = {
   block?: number
   heal?: number
   poison?: number
+  vulnerable?: number
   attackBonus?: number
   selfDamage?: number
   repeat?: number
@@ -28,22 +29,41 @@ export type CardDefinition = {
   effect: CardEffect
 }
 
-export type EnemyActionType = 'attack' | 'block' | 'heavyAttack' | 'poison'
-export type EnemyBehaviorMode = 'sequential' | 'weighted_random'
+export type EnemyActionType = 'attack' | 'block' | 'poison' | 'vulnerable'
+export type EnemyKind = 'normal' | 'elite' | 'boss'
 
 export type EnemyAction = {
   type: EnemyActionType
   value: number
   label: string
-  weight?: number
+}
+
+export type EnemyPhase = {
+  id: string
+  minHpRatio: number
+  actions: EnemyAction[]
 }
 
 export type EnemyDefinition = {
   id: string
   name: string
   maxHp: number
-  behaviorMode: EnemyBehaviorMode
-  actions: EnemyAction[]
+  kind: EnemyKind
+  phases: EnemyPhase[]
+}
+
+export type RelicEffect = {
+  battleStartBlock?: number
+  bonusPoison?: number
+  bonusDamageAgainstVulnerable?: number
+  turnStartBlockIfEnemyPoisoned?: number
+}
+
+export type RelicDefinition = {
+  id: string
+  name: string
+  description: string
+  effect: RelicEffect
 }
 
 export type PlayerState = {
@@ -51,6 +71,7 @@ export type PlayerState = {
   maxHp: number
   block: number
   poison: number
+  vulnerable: number
   attackBonus: number
   pendingDrawPenalty: number
   pendingEnergyPenalty: number
@@ -65,9 +86,10 @@ export type EnemyState = {
   maxHp: number
   block: number
   poison: number
+  vulnerable: number
   actionIndex: number
-  behaviorMode?: EnemyBehaviorMode
-  actions?: EnemyAction[]
+  kind: EnemyKind
+  phases: EnemyPhase[]
 }
 
 export type BattleEffectTone = 'damage' | 'poison' | 'heal'
@@ -80,13 +102,33 @@ export type BattleEffect = {
   value: number
 }
 
-export type Screen = 'start' | 'battle' | 'reward' | 'result'
+export type MapNodeType = 'battle' | 'elite' | 'rest' | 'shop' | 'boss'
+
+export type MapNode = {
+  id: string
+  row: number
+  lane: number
+  type: MapNodeType
+  nextNodeIds: string[]
+  enemyId: string | null
+}
+
+export type DungeonMap = {
+  seed: number
+  rows: MapNode[][]
+  availableNodeIds: string[]
+  clearedNodeIds: string[]
+}
+
+export type Screen = 'start' | 'map' | 'battle' | 'reward' | 'rest' | 'shop' | 'result'
 
 export type ResultType = 'clear' | 'gameover' | null
 
 export type GameStats = {
   turns: number
   cardsEarned: number
+  battlesWon: number
+  elitesWon: number
 }
 
 export type GameState = {
@@ -95,6 +137,7 @@ export type GameState = {
   totalStages: number
   energy: number
   maxEnergy: number
+  gold: number
   player: PlayerState
   enemy: EnemyState
   deck: CardDefinition[]
@@ -106,6 +149,12 @@ export type GameState = {
   logs: string[]
   result: ResultType
   stats: GameStats
+  relics: string[]
+  map: DungeonMap
+  currentNode: MapNode | null
+  earnedRelic: RelicDefinition | null
+  shopCards: CardDefinition[]
+  shopRelic: RelicDefinition | null
 }
 
 export type RandomSource = () => number

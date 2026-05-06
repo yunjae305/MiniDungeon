@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { CardDefinition, GameState } from '../game/types'
+import RelicBar from './RelicBar'
 
 const cardTypeLabel = {
   attack: '공격',
@@ -44,18 +45,31 @@ export default function RewardScreen({ state, onSelectCard }: RewardScreenProps)
     <section className="screen reward-screen">
       <div className="hero-copy reward-copy">
         <p className="hero-kicker">전투 승리</p>
-        <h1>보상 카드를 선택하세요</h1>
+        <h1>보상을 챙기고 다음 길로</h1>
         <p className="hero-body">
-          현재 체력은 {state.player.hp} / {state.player.maxHp}이며, 선택을 마치면 다음 스테이지로 이동합니다.
+          현재 체력은 {state.player.hp} / {state.player.maxHp}이며, 보유 골드는 {state.gold}입니다.
         </p>
       </div>
+
+      {state.earnedRelic && (
+        <section className="panel reward-relic-panel">
+          <div className="panel-heading">
+            <h2>이번에 획득한 유물</h2>
+            <span className="status-chip">자동 획득</span>
+          </div>
+          <div className="relic-card reward-relic-card">
+            <strong>{state.earnedRelic.name}</strong>
+            <span>{state.earnedRelic.description}</span>
+          </div>
+        </section>
+      )}
 
       <div className="reward-actions">
         <button type="button" className="secondary-button" onClick={() => setShowDeck(true)}>
           현재 덱 보기
         </button>
         <button type="button" className="secondary-button" onClick={() => onSelectCard(null)}>
-          보상 받지 않기
+          카드 보상 건너뛰기
         </button>
       </div>
 
@@ -77,6 +91,8 @@ export default function RewardScreen({ state, onSelectCard }: RewardScreenProps)
           </button>
         ))}
       </div>
+
+      <RelicBar relicIds={state.relics} />
 
       {showDeck && (
         <div className="deck-overlay" role="dialog" aria-modal="true">

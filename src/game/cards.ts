@@ -110,6 +110,15 @@ export const cards: CardDefinition[] = [
     effect: { poison: 5 },
   },
   {
+    id: 'armor_break',
+    name: '갑옷 파쇄',
+    type: 'debuff',
+    description: '적에게 취약 2를 부여합니다.',
+    cost: 1,
+    source: 'reward',
+    effect: { vulnerable: 2 },
+  },
+  {
     id: 'calm_mind',
     name: '평정심',
     type: 'buff',
